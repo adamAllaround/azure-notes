@@ -1,0 +1,36 @@
+= App Service
+:toc:
+
+== General
+HTTP Based service for hosting web apps, mobile backends, REST APIs
+
+== Scaling
+* *In/Out* - Increase/decrease the number of machines
+* *Up/Down* - Scale single machine
+
+== Autoscaling
+TRiggered based on a schedule or a metric (or combined). Potential help when system is running low on resources. Its good for temporary increases in traffic. Not great for long term traffic that can be anticipated or resource intensive computation.
+Autoscaling is a feature of AppService Plan. When an autoscaling event occurs, the plan spins a new machine according to the spec and up to a limit.
+
+The following metrics are available:
+* *CPU Percentage.* This metric is an indication of the CPU utilization across all instances.
+* *Memory Percentage* - occupied memory by the app across all instances.
+* *Disk Queue Length.*
+* *Http Queue Length*
+* *Data In.* This metric is the number of bytes received across all instances.
+* *Data Out.* This metric is the number of bytes sent by all instances.
+
+There are also metrics available based on other azure components - for example number of items in Azure Service Bus.
+
+*Time grain* is a time over which one of these values is calculated - usually 1 minute. Duration is the time after which a meaningful observation can be made - min  5 min. If the metric is max avg cpu over 10 min, we will calculate 10 avg cpu over 10 time grains and then get a max.
+
+Autoscale action has a *cool down period.* Once scale event happens, there is a duration for which no more events will happen.
+
+IT's a good practice to define *rules in pairs*. One rule defines how the system is scaled out when an event occurs, the other one defines how its scaled in. they do not have to be related:
+* If the HTTP queue length exceeds 10, scale out by 1
+* If the CPU utilization exceeds 70%, scale out by 1
+* If the HTTP queue length is zero, scale in by 1
+* If the CPU utilization drops below 50%, scale in by 1
+* Scaling out is performed when any of the conditions is met. Scaling in requires all of them to be met.
+The metrics that are available are *Average, Max, Min, Total*.
+
