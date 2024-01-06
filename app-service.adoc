@@ -1,14 +1,14 @@
-= App Service
+== App Service
 :toc:
 
-== General
+==== General
 HTTP Based service for hosting web apps, mobile backends, REST APIs
 
-== Scaling
+=== Scaling
 * *In/Out* - Increase/decrease the number of machines
 * *Up/Down* - Scale single machine
 
-== Autoscaling
+=== Autoscaling
 TRiggered based on a schedule or a metric (or combined). Potential help when system is running low on resources. Its good for temporary increases in traffic. Not great for long term traffic that can be anticipated or resource intensive computation.
 Autoscaling is a feature of AppService Plan. When an autoscaling event occurs, the plan spins a new machine according to the spec and up to a limit.
 

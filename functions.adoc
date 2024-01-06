@@ -1,4 +1,78 @@
-= Azure Functions
-:toc:
+== Azure Functions
 
-== General
+https://learn.microsoft.com/en-us/azure/azure-functions/[Documentation]
+
+=== General
+An advancement from app service towards more serverless approach. -> we care less about IO, and more about just the code executing the task.
+Azure Functions supports triggers, which are ways to start execution of your code, and bindings, which are ways to simplify coding for input and output data.
+Functions is built on an app service. Function instance in the default - consumption plan, is a single CPU and 1.5GB memory. (due to single cpu, garbage collector pauses are likely).
+
+*Requires->* Storage Account
+
+Function app is a deployment unit. Its a container to organize particular functions that run on a function app. All the functions are deployed and scaled together - they share the same runtime version.
+
+=== Functions vs Logic Apps
+
+image::functions/logic-app-comparison.png[]
+
+=== Hosting plans
+There are three basic hosting plans available for Azure Functions. All available on both linux and windows machines:
+* Consumption plan - This is the default hosting plan. It scales automatically and you only pay for compute resources when your functions are running. Instances of the Functions host are dynamically added and removed based on the number of incoming events.
+* Premium plan, - Automatically scales based on demand using pre-warmed workers, which run applications with no delay after being idle, runs on more powerful instances, and connects to virtual networks
+* App service plan (Dedicated) - Run your functions within an App Service plan at regular App Service plan rates. Best for long-running scenarios where Durable Functions can't be used.
+* ASE - App Service Environment (ASE) is an App Service feature that provides a fully isolated and dedicated environment for securely running App Service apps at high scale.
+* Kubernetes - Kubernetes provides a fully isolated and dedicated environment running on top of the Kubernetes platform.
+
+=== Scaling
+Functions in consumption and premium plan are scaled similarly, it's just that premium plan uses different machines.
+
+image::functions/scaling.png[]
+
+=== Timeouts
+Timeouts are specified in host.json file and indicate the time after which a function needs to return after its trigger event.
+
+image::functions/timeouts.png[]
+
+=== Storage Account
+In order to operate, azure functions require a stoage account to manage its triggers and log function execution. The same storage account can be used by triggers and functions to store app data but for storage intensive apps, it's better to use a dedicated storage.
+Function code files are stored on Azure Files shares on the function's main storage account. When you delete the main storage account of the function app, the function code files are deleted and can't be recovered.
+
+=== Triggers
+Triggers define how a function is started and a function has *exactly one trigger*. Triggers carry data which is passed as a payload.
+Several types of triggers:
+* Webhook (HTTP Request)
+* Event Hub
+* Service Bus
+* Timer
+* Storage Queue
+* Blob - ie when a file appears in a blob container.
+
+=== Bindings
+Biding is a way to connect another azure resource to a function. Bindings are optional and a function may have zero or more bindings.
+Bindings can be divided into input and output bindings.
+Triggers and bindings let you avoid hardcoding access to other services. Your function receives data (for example, the content of a queue message) in function parameters. You send data (for example, to create a queue message) by using the return value of the function.
+
+=== Scaling
+The unit of scale for Azure Functions is the function app. (which may host several functions)
+In the consumption and Premium plans, functions instances are automatically added based on the amount of trigger events. Function instance is the whole unit which hosts all functions (whole function app), so single Function app will share its resources among all the functions. So in consumption plan theres a single CPU, running several functions at the same time in a single function app will mean cpu time sharing.
+Whole Function apps scale independently from each other, so splitting functions across funciton apps should bring benefits.
+
+In the Premium plan, the plan size determines the available memory and CPU for all apps in that plan on that instance.
+
+Azure Functions uses a component called the scale controller to monitor the rate of events and determine whether to scale out or scale in. The scale controller uses heuristics for each trigger type. For example, when you're using an Azure Queue storage trigger, it scales based on the queue length and the age of the oldest queue message.
+Function instances are scaled to zero when there's no traffic. Next trigger event will have an extra latency scaling fromo 0 to 1 - a cold start.
+
+Scaling actually depends on the trigger and language mix, there are few intricacies:
+
+* *Maximum instances*: A single function app only scales out to a maximum of 200 instances (on win consumption plan). A single instance may process more than one message or request at a time though, so there isn't a set limit on number of concurrent executions. (Single instance can process more than one trigger event this would mean)
+* *New instance rate*: For HTTP triggers, new instances are allocated, at most, once per second. For non-HTTP triggers, new instances are allocated, at most, once every 30 seconds.
+
+The scaling can be limited to a maximum number of instances. You can specify a lower maximum for a specific app by modifying the functionAppScaleLimit value. The functionAppScaleLimit can be set to 0 or null for unrestricted, or a valid value between 1 and the app maximum. App maximum will be 200 for Win consumption plan and 100 for Premium plan.
+
+=== Development
+
+The code for all the functions in a specific function app is located in a root project folder that contains a host configuration file. The _host.json_ file contains runtime-specific configurations and is in the root folder of the function app. A bin folder contains packages and other library files that the function app requires
+
+Function consists of two important pieces - a code and a config in _function.json_ file. In compiled language the json file is created from code and its annotations. The file contains definition for function triggers, binding and some other config info.
+
+
