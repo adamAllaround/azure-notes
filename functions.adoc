@@ -9,8 +9,6 @@ Functions is built on an app service. Function instance in the default - consump
 
 *Requires->* Storage Account
 
-Function app is a deployment unit. Its a container to organize particular functions that run on a function app. All the functions are deployed and scaled together - they share the same runtime version.
-
 === Functions vs Logic Apps
 
 image::functions/logic-app-comparison.png[]
@@ -18,8 +16,8 @@ image::functions/logic-app-comparison.png[]
 === Hosting plans
 There are three basic hosting plans available for Azure Functions. All available on both linux and windows machines:
 * Consumption plan - This is the default hosting plan. It scales automatically and you only pay for compute resources when your functions are running. Instances of the Functions host are dynamically added and removed based on the number of incoming events.
-* Premium plan, - Automatically scales based on demand using pre-warmed workers, which run applications with no delay after being idle, runs on more powerful instances, and connects to virtual networks
-* App service plan (Dedicated) - Run your functions within an App Service plan at regular App Service plan rates. Best for long-running scenarios where Durable Functions can't be used.
+* Premium plan, - Automatically scales based on demand using *pre-warmed workers*, which run applications with no delay after being idle, runs on more powerful instances, and connects to *virtual networks*
+* App service plan (Dedicated) - Run your functions *within an App Service plan* at regular App Service plan rates. *Best for long-running scenarios* where Durable Functions can't be used.
 * ASE - App Service Environment (ASE) is an App Service feature that provides a fully isolated and dedicated environment for securely running App Service apps at high scale.
 * Kubernetes - Kubernetes provides a fully isolated and dedicated environment running on top of the Kubernetes platform.
 
@@ -37,6 +35,9 @@ image::functions/timeouts.png[]
 In order to operate, azure functions require a stoage account to manage its triggers and log function execution. The same storage account can be used by triggers and functions to store app data but for storage intensive apps, it's better to use a dedicated storage.
 Function code files are stored on Azure Files shares on the function's main storage account. When you delete the main storage account of the function app, the function code files are deleted and can't be recovered.
 
+=== Function App
+Function app is an execution context in which our functions run. It's a unit of deployment and management of functions. It consists of one or more functions that are scaled together and managed together. All of the functions in a single app share the same pricing plan, deployment and runtime version. In functions 2.x all functions need to be authored in the same language.
+
 === Triggers
 Triggers define how a function is started and a function has *exactly one trigger*. Triggers carry data which is passed as a payload.
 Several types of triggers:
@@ -49,8 +50,8 @@ Several types of triggers:
 
 === Bindings
 Biding is a way to connect another azure resource to a function. Bindings are optional and a function may have zero or more bindings.
-Bindings can be divided into input and output bindings.
-Triggers and bindings let you avoid hardcoding access to other services. Your function receives data (for example, the content of a queue message) in function parameters. You send data (for example, to create a queue message) by using the return value of the function.
+Bindings can be divided into input and output bindings (or both).
+Triggers and bindings let you avoid hardcoding access to other services. Your function receives data (for example, the content of a queue message) in function parameters. You send data (for example, to create a queue message) by using the return value of the function. Triggers and bindings are defined differently depending on the language. For compiled languages they're usually configured with some annotations or decorating code of some sort, for others it's _function.json_
 
 === Scaling
 The unit of scale for Azure Functions is the function app. (which may host several functions)
@@ -75,4 +76,29 @@ The code for all the functions in a specific function app is located in a root p
 
 Function consists of two important pieces - a code and a config in _function.json_ file. In compiled language the json file is created from code and its annotations. The file contains definition for function triggers, binding and some other config info.
 
+[source, json]
+----
+{
+    "disabled":false,
+    "bindings":[
+        // ... bindings here
+        {
+            "type": "bindingType",	// <1>
+            "direction": "in",	// <2>
+            "name": "myParamName",	// <3>
+            // ... more depending on binding
+        }
+    ]
+}
+----
+Every binding has a few required parameters
+<1> the type of the binding - for example queueTrigger
+<2> direction - indicates whether binding is for receiving or pushing data out of function. For triggers the direction is always in. For bindings its _in_ or _out_. Some bindings support a special direction of _inout_.
+<3> the name that is used for the bound data in the function
+
+=== Configuration
+Your function project references connection information by name from its configuration provider. It doesn't directly accept the connection details, allowing them to be changed across environments. The default configuration provider uses environment variables that are set in Application Settings when running in the Azure Functions service, or from the local settings file when developing locally.
+Some connections in Azure Functions are configured to use an identity instead of a secret. Support depends on the extension using the connection. In some cases, a connection string may still be required in Functions even though the service to which you're connecting supports identity-based connections.
+Identity-based connections *are not supported with Durable Functions.*
+Whatever identity is being used must have permissions to perform the intended actions. This is typically done by assigning a role in Azure RBAC or specifying the identity in an access policy, depending on the service to which you're connecting
 

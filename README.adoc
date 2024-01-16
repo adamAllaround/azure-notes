@@ -3,5 +3,7 @@
 
 Set of docs to support Azure study.
 
+:toc:
+
 include::app-service.adoc[]
 include::functions.adoc[]
