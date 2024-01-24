@@ -7,3 +7,4 @@ Set of docs to support Azure study.
 
 include::app-service.adoc[]
 include::functions.adoc[]
+include::blob-storage.adoc[]

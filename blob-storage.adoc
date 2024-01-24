@@ -1,0 +1,65 @@
+== Blob Storage
+:toc:
+
+=== General
+
+Unstuctured Object storage solution for cloud. Unstructured data is data that doesn't adhere to a particular data model or definition, such as text or binary data.
+*Blob storage is designed for:*
+
+* Serving images or documents directly to a browser.
+* Storing files for distributed access.
+* Streaming video and audio.
+* Writing to log files.
+* Storing data for backup and restore, disaster recovery, and archiving.
+* Storing data for analysis by an on-premises or Azure-hosted service.
+
+Users or client applications can access objects in Blob storage via HTTP/HTTPS, from anywhere in the world. Objects in Blob storage are accessible via the Azure Storage REST API, Azure PowerShell, Azure CLI, or an Azure Storage client library.
+
+=== Storage Account
+It's the main organizational unit for blob storage. Provides a unique namespace for the storage data.
+Storage account name is a subdomain in the storage account endpoint.
+For example, if your storage account is named _mystorageaccount_, then the default endpoint for Blob storage is:
+----
+http://mystorageaccount.blob.core.windows.net
+----
+
+There are two performance levels of storage accounts:
+* *Standard* - Standard storage account type for blobs, file shares, queues, and tables. Recommended for most scenarios using Blob Storage or one of the other Azure Storage services
+* *Premium*
+	** *Block Blob* - Premium storage account type for block blobs and append blobs. Recommended for scenarios with high transaction rates or that use smaller objects or require consistently low storage latency (maybe logs ?).
+	** *Page blobs* - Premium storage account type for page blobs only.
+
+=== Containers
+A container organizes a set of blobs, similar to a directory in a file system. A storage account can include an unlimited number of containers, and a container can store an unlimited number of blobs.
+A container name must be a valid DNS name, as it forms part of the unique URI (Uniform resource identifier) used to address the container or its blobs
+
+There are following naming rules:
+* Container names can be between 3 and 63 characters long.
+* Container names must start with a letter or number, and can contain only lowercase letters, numbers, and the dash (-) character.
+* Two or more consecutive dash characters aren't permitted in container names
+
+----
+https://myaccount.blob.core.windows.net/mycontainer
+----
+
+=== Blobs
+
+Azure Storage supports three types of blobs
+* *Block blobs* store text and binary data. Block blobs are made up of blocks of data that can be managed individually. Block blobs can store up to about 190.7 TiB
+* *Append blobs* are made up of blocks like block blobs, but are optimized for append operations. Append blobs are ideal for scenarios such as logging data from virtual machines.
+* *Page blobs* store random access files up to 8 TB in size. Page blobs store virtual hard drive (VHD) files and serve as disks for Azure virtual machines.
+
+----
+https://myaccount.blob.core.windows.net/mycontainer/myblob
+https://myaccount.blob.core.windows.net/mycontainer/myvirtualdirectory/myblob
+----
+
+=== Block Blob access tiers
+
+Each access tier in Azure Storage is optimized for a particular pattern of data usage.
+* The *Hot* access tier, which is optimized for frequent access of objects in the storage account. The Hot tier has the highest storage costs, but the lowest access costs. New storage accounts are created in the hot tier by default.
+* The *Cool* access tier, which is optimized for storing large amounts of data that is infrequently accessed and stored for at least _30 days_. The Cool tier has lower storage costs and higher access costs compared to the Hot tier.
+* The *Cold* access tier, which is optimized for storing data that is infrequently accessed and stored for a minimum of *90 days*. The cold tier has lower storage costs and higher access costs compared to the cool tier
+* The *Archive* tier, which is available only for individual block blobs. The archive tier is optimized for data that can tolerate *several hours of retrieval latency* and remains in the Archive tier for at least *180 days*. The archive tier is the most cost-effective option for storing data, but accessing that data is more expensive than accessing data in the hot or cool tiers.
+
+https://learn.microsoft.com/en-us/training/modules/explore-azure-blob-storage/4-blob-storage-security
