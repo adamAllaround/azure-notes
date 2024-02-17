@@ -62,4 +62,131 @@ Each access tier in Azure Storage is optimized for a particular pattern of data 
 * The *Cold* access tier, which is optimized for storing data that is infrequently accessed and stored for a minimum of *90 days*. The cold tier has lower storage costs and higher access costs compared to the cool tier
 * The *Archive* tier, which is available only for individual block blobs. The archive tier is optimized for data that can tolerate *several hours of retrieval latency* and remains in the Archive tier for at least *180 days*. The archive tier is the most cost-effective option for storing data, but accessing that data is more expensive than accessing data in the hot or cool tiers.
 
-https://learn.microsoft.com/en-us/training/modules/explore-azure-blob-storage/4-blob-storage-security
+Hot or cool level can be set on the account level.
+Access tier can be set on a blob during or after upload to container.
+Data in the cool access tier has slightly lower availability, but still has high durability, retrieval latency, and throughput characteristics similar to hot data.
+Data in the archive access tier is stored offline. The archive tier offers the lowest storage costs but also the highest access costs and latency
+The hot and cool tiers support all redundancy options. The archive tier supports only LRS, GRS, and RA-GRS.
+Data storage limits are set at the account level and not per access tier. You can choose to use all of your limit in one tier or across all three tiers
+
+==== Blob lifecycle policies
+
+There additionaly is a possibility to  rule based *policies* which automatically move blobs between tiers.
+* Can transfer between Hot=>Cool, Hot=>Archive, Cool=>Archive, or *delete* a blob at the end of lifecycle.
+* Rules can be applied to storage accounts (ran once a day), containers or chosen blobs (using prefixes as filters)
+They are a way to optimize storage costs. Storage in Hot tier is the most expensive.
+
+Data stored in a *premium block blob* storage account cannot be tiered to Hot, Cool, or Archive using Set Blob Tier or using Azure Blob Storage lifecycle management. To move data blobs need to be copied between storage accounts.
+
+A lifecycle management policy is a collection of rules in a JSON document. The four params - name, enabled, type, definition are mandatory.
+
+[source,json]
+----
+{
+  "rules": [
+    {
+      "name": "ruleFoo",
+      "enabled": true,
+      "type": "Lifecycle",
+      "definition": {
+        "filters": {
+          "blobTypes": [ "blockBlob" ],
+          "prefixMatch": [ "container1/foo" ]
+        },
+        "actions": {
+          "baseBlob": {
+            "tierToCool": { "daysAfterModificationGreaterThan": 30 },
+            "tierToArchive": { "daysAfterModificationGreaterThan": 90 },
+            "delete": { "daysAfterModificationGreaterThan": 2555 }
+          },
+          "snapshot": {
+            "delete": { "daysAfterCreationGreaterThan": 90 }
+          }
+        }
+      }
+    }
+  ]
+}
+----
+
+* *Filters* indicate rule search conditions. blobTypes param is mandatory. prefixMatch and blobIndexMatch are not. prefixMatch needs to start with a container name. If more than one filter is defined, they are joined with logical AND.
+* *Actions* define steps for rule. At least one action per rule is required. Actions supported are [tierToCool, enableAutoTierToHotFromCool, tierToArchive, delete]. If more than one action is defined on blob, logic will apply the cheapest one. delete is the cheapest. archive is cheaper than cool etc.
+* *RunConditions* are based on age . Available values:
+	** daysAfterModificationGreaterThan - applies to *base blob* actions
+	** daysAfterCreationGreaterThan - applies to blob *snapshot* actions
+	** daysAfterLastAccessTimeGreaterThan - The condition for a current version of a blob when *access tracking is enabled*
+	** daysAfterLastTierChangeGreaterThan - This condition applies only to *tierToArchive* actions and can be used only with the *daysAfterModificationGreaterThan* condition
+
+Policies can be added via azure portal, azure CLI and more.
+
+==== Rehydrating blob from archive
+Archived blob is offline and cannot be read or modified. In order to read or modify it, it needs to be moved to *hot or cool* tier (rehydration) using one of the following:
+* Copy it to a new blob in one of the online tiers with Copy Blob or Copy Blob from Url operation (recommended).
+	** Copying a blob creates a new blob with a *different name* or to a *different container*. Original one remains unchanged.
+	** Supported in the same storage account only.
+	** Copying archive to archive blob is not supported.
+* Change its access tier with Set Blob Tier operation.
+	** Once the rehydration starts it cannot be stopped.
+	** Changing its tier does not affect last modified date. If there's a lifecycle management policy that looks at last modified date it may happen that the policy will bring it back to archive.
+
+Rehydrating blob from archive may take several hours. Microsoft recommends rehydrating larger blobs. Rehydrating smaller blobs may take longer.
+
+A *priority* can be set on rehydration operation via _x-ms-rehydrate-priority_ header (applicable to both rehydration operations).
+* Standard priority rehydration is processed in the order it was received and may take up to 15h
+* High priority - prioritized over standards and _might_ complete under 1h for blobs up to 10gb
+
+=== Azure Storage Security
+
+Azure Storage provides a comprehensive set of security capabilities that together enable developers to build secure applications:
+
+* All data (including metadata) written to Azure Storage is automatically encrypted using Storage Service Encryption (SSE). That applies to all resources - disks, files, queues, tables, blobs. They're encrypted regardless of storage tier and encryption cannot be disabled.
+* Microsoft Entra ID and Role-Based Access Control (RBAC) are supported at no extra cost for Azure Storage for both resource management operations and data operations, as follows:
+	** You can assign RBAC roles scoped to the storage account to security principals and use Microsoft Entra ID to authorize resource management operations such as key management.
+	** Microsoft Entra integration is supported for blob and queue data operations. You can assign RBAC roles scoped to a subscription, resource group, storage account, or an individual container or queue to a security principal or a managed identity for Azure resources.
+* Data can be secured in transit between an application and Azure by using Client-Side Encryption, HTTPS, or SMB 3.0.
+* OS and data disks used by Azure virtual machines can be encrypted using Azure Disk Encryption.
+* Delegated access to the data objects in Azure Storage can be granted using a shared access signature.
+
+Encryption keys can be managed by Microsoft (as it is by default) or we can decide to manage encryption with our own keys.
+
+=== Storing static web files
+
+Staic website content (HTML, css, js) can be served directly from storage container named $web and is a way to serve content for pages that don't require web server to render content. This approach enables the use of serverless tech as a backend to such pages (or appservices).
+
+*Limitations*:
+* Cannot modify headers when storing static website content in storage container. That would require an azure cdn
+* AuthN and AuthZ aren't supported.
+
+In order to enable static website hosting, it's enough to change configuration on a storage account in a *Static Website* blade, provide an index file and an error page.
+Setting access level from Private to Blob on a $web container does not affect how pages are served through the static website endpoint
+_https://contosoblobaccount.z22.web.core.windows.net/index.html_ however the access by the blob endpoint is affected and users can access the file by both endpoints _https://contosoblobaccount.blob.core.windows.net/$web/index.html_
+
+Static website can be available via a custom domain instead of web.core.windows.net.
+
+=== Metadata
+
+Containers and blobs support custom metadata, represented as HTTP headers. Metadata headers can be set on a request that creates a new container or blob resource, or on a request that explicitly creates a property on an existing resource. That can definitely be done via an api or REST call, not sure of others.
+Metadata headers are name/value pairs. The format for the header is: _x-ms-meta-name:string-value_.
+Names are case-insensitive. Note that metadata names preserve the case with which they were created, but are case-insensitive when set or read. If two or more metadata headers with the same name are submitted for a resource, the Blob service returns status code 400 (Bad Request).
+The total size of all metadata pairs can be up to 8KB in size.
+Metadata name/value pairs are *valid HTTP headers*, and so they adhere to all restrictions governing HTTP headers.
+
+Containers and blobs also support certain standard HTTP properties. Properties and metadata are both represented as standard HTTP headers; the difference between them is in the naming of the headers. Metadata headers are named with the header prefix x-ms-meta- and a custom name. Property headers use standard HTTP header names
+
+The standard HTTP headers supported on *containers* include:
+
+ETag
+Last-Modified
+
+The standard HTTP headers supported on *blobs* include:
+
+ETag
+Last-Modified
+Content-Length
+Content-Type
+Content-MD5
+Content-Encoding
+Content-Language
+Cache-Control
+Origin
+Range
