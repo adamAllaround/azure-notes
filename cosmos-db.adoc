@@ -1,0 +1,206 @@
+== Azure Cosmos DB
+
+Azure Cosmos DB is a *globally distributed* database system that allows you to read and write data from the *local replicas* of your database and it transparently replicates the data to all the regions associated with your Cosmos account. It is a fully managed *NoSQL* database designed to provide low latency, elastic scalability of throughput, well-defined semantics for data consistency, and high availability.
+You can configure your databases to be globally distributed and _available in any of the Azure regions_ (to bring the data closer to where the users are and reduce latency). We can [.underline]#add or remove regions at any time# and application does not need to be stopped for this.
+With its novel multi-master replication protocol, *every region supports both writes and reads*.
+
+*Some SLAs are:*
+* Unlimited elastic write and read scalability.
+* 99.999% read and write availability all around the world.
+* Guaranteed reads and writes served in less than 10 milliseconds at the 99th percentile.
+
+=== Organizational units
+
+image::cosmos/cosmos-entities.png[]
+
+*Azure Cosmos Account* is the topmost org unit that has a DNS name and enables some management. Regions can be added to account any time to distibute data and throughput. Currently max 50 cosmos accounts can be created under single subscription, but that's a soft limit that can be modified if needed.
+
+*Database*
+A database is analogous to a namespace. A database is the unit of management for a set of Azure Cosmos DB containers. There can be many in a single account.
+
+*Container* represents a table, graph, collection - data. It's a unit of scalability. WE can have an unlimited provisioned throughput and storage in a container.
+A container is a *schema-agnostic* container of items. For example, an item that represents a person and an item that represents an automobile can be placed in the same container. By default, all items that you add to a container are automatically indexed without requiring explicit index or schema management
+An Azure Cosmos DB container is the unit of scalability both for provisioned throughput and storage. A container is horizontally partitioned and then replicated across multiple regions. The items that you add to the container are automatically grouped into logical partitions, which are distributed across physical partitions, based on the partition key. The throughput on a container is evenly distributed across the physical partitions.
+
+Container throughput can be configured as:
+* Dedicated - the throughput provisioned on a container is reserved for that container and backed by SLAs.
+* Shared - containers share the provisioned throughput with other shared throughput containers. (but not the dedicated ones)
+
+*Item* - Azure Cosmos DB item can represent either a document in a collection, a row in a table, or a node or edge in a graph
+
+=== Consistency
+
+Azure Cosmos DB approaches data consistency as a spectrum of choices instead of two extremes. Strong consistency and eventual consistency are at the ends of the spectrum, but there are many consistency choices along the spectrum. Developers can make choices between consistency and availability,throughput, latency.
+
+Read consistency applies to a single read operation scoped within a partition-key range or a logical partition. The read operation can be issued by a remote client or a stored procedure.
+
+Azure Cosmos DB guarantees that 100 percent of read requests meet the consistency guarantee for the consistency level chosen
+
+image::comsom/consistency-levels.png[]
+
+Consistency levels are region agnostic. It does not matter where the reads and writes are served from or whether account is configured with single or multiple write regions.
+
+On the level of Cosmos DB account, a default consistency level can be defined at any time. It will apply to all databases and containers
+
+==== Strong consistency
+
+Strong consistency offers a linearizability guarantee. Linearizability refers to serving requests concurrently. The reads are guaranteed to return the most recent committed version of an item. A client *never sees an uncommitted or partial write*. Users are always guaranteed to read the latest committed write.
+
+==== Bounded staleness consistency
+
+Bounded staleness means  that read operations can lag behind writes by a bounded amount of either *writes* or *time*. That is reads may lag by at most _K_ versions (updates) of an item or by _T_ time interval, *whichever is reached first*.
+For a single region account, [.underline]#the minimum value of K and T is 10 write operations or 5 seconds#. For multi-region accounts the [.underline]#minimum value of K and T is 100,000 write operations or 300 seconds.#
+This is called a consistent prefix guarantee.
+
+==== Session consistency
+
+In session consistency, within a single client session reads are guaranteed to honor the consistent-prefix, monotonic reads, monotonic writes, read-your-writes, and write-follows-reads guarantees. This assumes a single "writer" session or sharing the session token for multiple writers.
+
+==== Consistent prefix consistency
+
+In consistent prefix, updates made as single document writes see eventual consistency (no ordering guarantee for reads probably). Write operations within a transaction of multiple documents are always visible together. That means, assume there are updates on both docs D1 and D2 done in transactions T1 and T2. When client reads any replica it will see either D1v1 and D2v1 or D1v2 and D2v2 but never mixed like D1v1 and D2v2.
+
+==== Eventual Consistency
+
+In eventual consistency, there's no ordering guarantee for reads. In the absence of any further writes, the replicas eventually converge. A client may read the values that are older than the ones it read before. Eventual consistency is ideal where the application doesn't require any ordering guarantees. Examples include count of Retweets, Likes, or nonthreaded comments
+
+=== Supported APIs
+
+The following are supported
+Azure Cosmos DB for NoSQL::
+	Stores data in document format. This api is *native* to cosmos db. it is said to offer the best e2e experience. Querying is done using sql syntax.
+Azure Cosmos DB for MongoDB::
+	Stores data in document format via BSON. Compatible with MongoDB wire protocol. Great choice if you want to use the broader MongoDB ecosystem and skills, without compromising on using Azure Cosmos DB features
+Azure Cosmos DB for PostgreSQL::
+	Managed service for running PostgreSQL at any scale, with the Citus open source superpower of distributed tables. It stores data either on a single node, or distributed in a multi-node configuration.
+Azure Cosmos DB for Apache Cassandra::
+	API for Cassandra is wire protocol compatible with native Apache Cassandra. The Azure Cosmos DB API for Cassandra stores data in column-oriented schema.s
+Azure Cosmos DB for Table::
+	API for Table stores data in key/value format. This is for users of Azure Table Storage who experience limitations in latency, scaling, throughput, global distribution, index management, low query performance. Apparently the API solves these issues and provides some benefits of distributed DB that Cosmos DB is. API for Table only supports OLTP scenarios.
+Azure Cosmos DB for Apache Gremlin::
+	The Azure Cosmos DB API for Gremlin allows users to make graph queries and stores data as edges and vertices.
+
+=== Payments (capacity mode)
+
+With Azure Cosmos DB, you pay for the throughput you provision and the storage you consume on an hourly basis. Throughput must be provisioned to ensure enough resources are available to serve database always.
+
+The cost of all database operations is normalized by Azure Cosmos DB and is expressed by [.underline]#request units# (or RUs, for short). A request unit represents the system resources such as CPU, IOPS, and memory that are required to perform the database operations supported by Azure Cosmos DB. (that means its an abstraction to execute some workload behind a query).
+*RU* is the cost to do a point read, which is fetching a single item by its ID and partition key value, for a 1-KB item is 1RU. All other operations are similarly expressed by RUs and [.underline]#RUs are used across all apis.#
+
+The type of Azure Cosmos DB account you're using determines the way consumed RUs get charged. There are three modes in which you can create an account: (Setting is called capacity mode)
+* *Provisioned throughput mode* - Agree on a starting number of RUs on a per second basis with increments of a 100. That setting can be altered at any time after creation. Throughput is provisioned on container or database  level.
+* *Serverless mode* - Nothing is provisioned, but we only pay for what we've used at the end of billing period.
+* *Autoscale mode* - In this mode you can automatically scale RUs of database or container based on its usage. This scaling operation doesn't affect the availability, latency, throughput, or performance of the workload. This mode is well suited for mission-critical workloads that have variable or unpredictable traffic patterns, and require SLAs on high performance and scale.
+
+=== Triggers, stored procedures, functions
+
+Cosmosdb can execute user defined trigers, stored procedures and functions by providing possibility to write language-integrated, transactional execution of JavaScript. In order to call either trigger, stored proc or function, you need to register it.
+
+==== Stored Procedures
+
+Stored procedures support CRUD and querying items inside cosmosdb container. Stored proc are registered per collection and can operate on any document or attachment in that collection.
+
+[source,javascript]
+----
+var helloWorldStoredProc = {
+    id: "helloWorld",
+    serverScript: function () {
+        var context = getContext();
+        var response = context.getResponse();
+
+        response.setBody("Hello, World");
+    }
+}
+----
+The context object provides access to all operations that can be performed in Azure Cosmos DB, and access to the request and response objects. In this case, you use the response object to set the body of the response to be sent back to the client.
+
+Creating an item is an async operation and depends on the callback function. Callback function has two params - the error object and the return value of success.
+
+When defining a stored procedure in the Azure portal, input parameters are always sent as a string to the stored procedure. Even if you pass an array of strings as an input, the array is converted to string and sent to the stored procedure.
+All Azure Cosmos DB operations [.underline]#must complete within a limited amount of time.# Stored procedures also. All collection functions return a Boolean value that represents whether that operation completes or not.
+
+You can implement *transactions* on items within a container by using a stored procedure. JavaScript functions can implement a continuation-based model to batch or resume execution. The continuation value can be any value of your choice and your applications can then use this value to resume a transaction from a new starting point.
+
+==== Triggers
+
+Azure Cosmos DB supports *pretriggers* (fired before modifying an item) and *post-triggers* (after modifying an item). Triggers aren't automatically executed, they must be specified for each database operation where you want them to execute. After you define a trigger, you should register it by using the Azure Cosmos DB SDKs
+
+[source,javascript]
+----
+function validateToDoItemTimestamp() {
+    var context = getContext();
+    var request = context.getRequest();
+
+    // item to be created in the current operation
+    var itemToCreate = request.getBody();
+
+    // validate properties
+    if (!("timestamp" in itemToCreate)) {
+        var ts = new Date();
+        itemToCreate["timestamp"] = ts.getTime();
+    }
+
+    // update the item that will be created
+    request.setBody(itemToCreate);
+}
+----
+the above is a pretrigger. Pretriggers can't have any input parameters. The request object in the trigger is used to manipulate the request message associated with the operation. When triggers are registered, you can specify the operations that it can run with. This trigger should be created with a _TriggerOperation_ value of _TriggerOperation.Create_, which means using the trigger in a replace operation isn't permitted.
+
+One thing that is important to note is the transactional execution of triggers in Azure Cosmos DB. The *post-trigger runs as part of the same transaction* for the underlying item itself. An exception during the post-trigger execution *fails the whole transaction*
+
+
+==== User Defined functions
+
+The following sample creates a UDF to calculate income tax for various income brackets. This user-defined function would then be used inside a query. For the purposes of this example assume there's a container called "Incomes" with properties as follows
+
+[source,json]
+----
+{
+   "name": "User One",
+   "country": "USA",
+   "income": 70000
+}
+----
+
+and a UDF to calculate tax
+
+[source,javascript]
+----
+function tax(income) {
+
+        if(income == undefined)
+            throw 'no input';
+
+        if (income < 1000)
+            return income * 0.1;
+        else if (income < 10000)
+            return income * 0.2;
+        else
+            return income * 0.4;
+    }
+----
+
+=== Change feed 
+
+Change feed in Azure Cosmos DB is a record of changes to a container in the order they occur that seems like can be emitted by the DB. It works by listening to an Azure Cosmos DB container for any changes. It then outputs the sorted list of documents that were changed in the order in which they were modified. The output can be distributed across one or more consumers for parallel processing.
+Change feed lists: 
+* Inserts
+* Updates
+Deletes are not logged.
+Models of working:
+Push model::
+Change feed processor pushes the newest work to consumers. (recommended)
+Pull model::
+With a pull model, the client has to pull the work from the server. The client, in this case, not only has business logic for processing work but also storing state for the last processed work, handling load balancing across multiple clients processing work in parallel, and handling errors
+
+==== Push Model
+There are two ways you can read updates with a push model:
+* Azure Functions Azure Cosmos DB triggers (uses change feed processor behind the scenes). Funciton is triggered on every new event. Easy to scale through functions app.
+* Change feed processor library. It's a part of Azure Cosmos DB .NET V3 and Java V4 SDKs and its a way of handling norifications with code (just like handling events). There are four main components of implementing the change feed processor.
+    ** The monitored container - the source of updates
+    ** The lease container - acts as a state storage and coordinates processing the change feed across multiple workers
+    ** The compute instance - a host for a change feed processor - can be an app service, kubernetes pod, vm, physical machine.
+    ** The delegate - the code that deals with a batch of updates that we'll want to process
+
+
+
