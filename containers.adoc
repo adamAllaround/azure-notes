@@ -1,0 +1,20 @@
+== Containers
+:toc:
+
+=== Azure Container Registry
+
+IT's a library of containers that can be used with our current development. Each image is a read-only snapshot of a Docker-compatible container. Azure container registries can include both Windows and Linux images. In addition to Docker container images, Azure Container Registry stores related content formats such as Helm charts and images built to the Open Container Initiative (OCI) Image Format Specification. Such images can be Pulled from an Azure container registry to various deployment targets. For example Azure services that support building and running applications at scale, including Azure Kubernetes Service (AKS), App Service, Batch, Service Fabric, and others.
+
+=== Azure Container Registry Tasks
+Azure Container Registry Tasks can be used to create images in Azure and build them when code is changed, base image updated etc. and also deploy.
+
+=== Service Tiers
+* Basic - Cost optimized entry point for learning mainly. It has a full functionality but the included storage and image throughput are most appropriate for lower usage scenarios.
+* Standard - enables several capabilities such as Microsoft Entra authentication integration, image deletion, and webhooks (basic has that too) with *increased included storage and image throughput*. Satisfies the needs of most production scenarios.
+* Premium - provide the highest amount of included storage and concurrent operations, enabling high-volume scenarios. Additionally adds features such as geo-replication for managing a single registry across multiple regions, content trust for image tag signing, and private link with private endpoints to restrict access to the registry.
+
+All tiers have the following features:
+* *Encryption-at-rest* - applies to images in registry. Azure encrypts the image before storing it and decrypts on the fly when its pulled.
+* *Regional storage* - Azure Container Registry stores data in the region where the registry is created. to help customers meet data residency and compliance requirements. Azure may also store data in a paired region in same geography. If a regional outage occurs, the registry data may become unavailable and isn't automatically recovered - geo replication needs to be enabled to have resiliency against regional outage.
+* *Zone redundancy* - A feature of the Premium service tier, zone redundancy uses Azure availability zones to replicate your registry to a minimum of three separate zones in each enabled region
+* *Scalable storage* - Azure Container Registry allows you to create as many repositories, images, layers, or tags as you need, up to the registry storage limit. High numbers of repositories and tags can impact the performance of your registry though so periodic maintenance is advised.

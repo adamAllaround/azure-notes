@@ -1,0 +1,200 @@
+== Authentication and Authorization (Identity Platform)
+
+Helps you build applications your users and customers can sign in to using their Microsoft identities or social accounts, and provide authorized access to your own APIs or Microsoft APIs like Microsoft Graph.
+
+Components that make up the Identity Platform:
+
+* *OAuth 2.0 and OpenID Connect standard-compliant authentication service* enabling developers to authenticate several identity types, including:
+** *Work or school accounts*, provisioned through Microsoft Entra ID
+** *Personal Microsoft account*, like Skype, Xbox, and Outlook.com
+** *Social or local accounts*, by using Azure Active Directory B2C
+** *Social or local customer accounts*, by using Microsoft Entra External ID
+
+* _Open-source libraries_: *Microsoft Authentication Libraries* (MSAL) and support for other standards-compliant libraries
+* *Microsoft identity platform endpoint*: Works with the Microsoft Authentication Libraries (MSAL) or any other standards-compliant library. It implements human readable scopes, in accordance with industry standards.
+* *Application management portal*: *A registration and configuration experience in the Azure portal*, along with the other Azure management capabilities. (WOW interesting)
+* *Application configuration API and PowerShell:* Programmatic configuration of your applications through the Microsoft Graph API and PowerShell so you can automate your DevOps tasks.
+
+For developers, the Microsoft identity platform offers integration of modern innovations in the identity and security space like *passwordless authentication*, *step-up authentication,* and *Conditional Access*. You don’t need to implement such functionality yourself: applications integrated with the Microsoft identity platform natively take advantage of such innovations.
+
+=== Application, tenant, service principal
+
+The application object is the global representation of your application for use across all tenants, and the service principal is the local representation for use in a specific tenant. The application object serves as the template from which common and default properties are derived for use in creating corresponding service principal objects.
+A service principal must be created in each tenant where the application is used to enable it to establish an identity for sign-in and/or access to resources being secured by the tenant.
+
+An application object has:
+
+* A one to one relationship with the software application, and
+* A one to many relationships with its corresponding service principal object(s).
+
+The application object describes three aspects of an application.
+* How the service can issue tokens in order to access the application.
+* Resources that the application might need to access
+* The actions that the application can take.
+
+To access resources secured by a Microsoft Entra tenant, the entity that requires access must be represented by a *security principal*. This is true for both users (user principal) and applications (service principal).
+The security principal defines the access policy and permissions for the user/application in the Microsoft Entra tenant.
+
+There are three types of service principal:
+* *Application* - This type of service principal is the local representation, or application instance, of a global application object in a single tenant or directory. The service principal object defines what the app can actually do in the specific tenant, who can access the app, and what resources the app can access.
+* *Managed identity* - used to represent a managed identity. Managed identities provide an identity for applications to use when connecting to resources that support Microsoft Entra authentication. When a managed identity is enabled, a service principal representing that managed identity is created in your tenant. Service principals representing managed identities can be granted access and permissions, but can't be updated or modified directly.
+* *Legacy* - This type of service principal represents a legacy app, which is an app created before app registrations were introduced or an app created through legacy experiences. A legacy service principal can have:
+** credentials
+** service principal names
+** reply URLs
+and other properties that an authorized user can edit, but doesn't have an associated app registration
+
+Oauth 2.0 allows user (or more precisely a third party app on behalf of a user) access certain web hosted resources. Examples of such web hosted resources are *Microsoft Graph*, *Microsoft 365 Mail Api*, *Azure Key Vault*. Any third party resouces that integrate with Azure platform can also be accessed in the same way. Any of such web resources can define a set of permissions that they can grant. If the permissions are rather granular, it's possible that a little more precise request for permissions can be reuqested by a software application on behalf of a user (the ones the application really needs).
+
+An app requests the permissions it needs by specifying the permission in the scope query parameter. Identity platform supports several well-defined OpenID Connect scopes and resource-based permissions (each permission is indicated by appending the permission value to the resource's identifier or application ID URI). For example, the permission string https://graph.microsoft.com/Calendars.Read is used to request permission to read users calendars in Microsoft Graph. Permissions are typically requested to Microsoft Identity Platform's authorize endpoint. (some higher privileges are requested against via administrator consent endpoint).
+If the resource identifier is omitted in the scope parameter (in request to the auth endpoint), the resource is assumed to be Microsoft Graph. For example, scope=User.Read is equivalent to https://graph.microsoft.com/User.Read.
+
+Microsoft Identity Platform suports *two types of permissions*:
+* Delegated permissions - used by apps that have a signed in user. For such apps, *either user or an admin consents* to the permissions that app requests. The app is delegated with the permission to act as a user against the target Azure Resource.
+* App only access - used by apps that run without a logged in user (ie background services or daemons). *Only admin* can consent to app only access permissions.
+
+There are three *tyes of consent*:
+* *Static user consent* - developer needs to specify all the permissions app needs in app's configuration in Azure Portal. If the user hasnt granted consent for this app, they will be prompted to do so. Static permissions also enable administrators to consent on behalf of all users in the organization. This approach may be problematic because the app needs to request all permissions it would ever need which may be discouraging for users. also the app needs to know all resources ahead of time.
+* *Incremental and dynamic user consent* - You request for minimal set of permissions upfront and request more over time as user continues to use more features of the application. If the user hasn't yet consented to new scopes added to the request, they're prompted to consent only to the new permissions. Incremental, or dynamic consent, *only applies to delegated permissions* and not to app-only access permissions. Requesting new scopes is just including them in the _scope_ parameter when requesting an access token. Dynamic consent can be convenient, but presents a big challenge for permissions that require admin consent, since the admin consent experience doesn't know about those permissions at consent time. If you require admin privileged permissions or if your app uses dynamic consent, you must register all of the permissions in the Azure portal (not just the subset of permissions that require admin consent). This enables tenant admins to consent on behalf of all their users.
+* *Admin consent* - required when app needs access to certain high privilege permissions. Ensures that administrators have some other controls before authorizing users to access highly privileged data from organization. Admin consent done on behalf of an organization still requires the static permissions registered for the app. Set those permissions for apps in the app registration portal if you need an admin to give consent on behalf of the entire organization.
+
+=== Requesting consent
+
+[source]
+----
+GET https://login.microsoftonline.com/common/oauth2/v2.0/authorize?
+client_id=6731de76-14a6-49ae-97bc-6eba6914391e
+&response_type=code
+&redirect_uri=http%3A%2F%2Flocalhost%2Fmyapp%2F
+&response_mode=query
+&scope=
+https%3A%2F%2Fgraph.microsoft.com%2Fcalendars.read%20
+https%3A%2F%2Fgraph.microsoft.com%2Fmail.send
+&state=12345
+----
+
+The scope parameter is a space-separated list of delegated permissions that the app is requesting. Each permission is indicated by appending the permission value to the resource's identifier. After the user enters their credentials, the Microsoft identity platform checks for a matching record of user consent. If the user hasn't consented to any of the requested permissions in the past, and if the administrator hasn't consented to these permissions on behalf of the entire organization, the Microsoft identity platform asks the user to grant the requested permissions.
+
+=== Conditional Access
+
+Provides a few extra ways to protect services including: 
+* Multifactor authentication
+* Allowing only Intune enrolled devices to access specific services
+* Restricting user locations and IP ranges
+
+=== MSAL
+
+The Microsoft Authentication Library (MSAL) can be used to provide secure access to Microsoft Graph, other Microsoft APIs, or your own web API. MSAL supports many different application architectures and platforms including .NET, JavaScript, Java, Python, Android, and iOS
+
+MSAL gives you many ways to get tokens.
+* No need to directly use the OAuth libraries or code against the protocol in your application.
+* Acquires tokens on behalf of a user or on behalf of an application (when applicable to the platform).
+* Maintains a token cache and refreshes tokens for you when they're close to expire. You don't need to handle token expiration on your own.
+* Helps you specify which audience you want your application to sign in.
+* Helps you set up your application from configuration files.
+* Helps you troubleshoot your app by exposing actionable exceptions, logging, and telemetry
+
+The following table shows some of the different authentication flows provided by Microsoft Authentication Library
+
+image::auth/flows.png[]
+
+Multiple types of applications can acquire security tokens. These applications tend to be separated into the following two categories. Each is used with different libraries and objects.
+
+* *Public client applications*: Are apps that run on devices or desktop computers or in a web browser. They're not trusted to safely keep application secrets, so they only access web APIs on behalf of the user. (They support only public client flows.) Public clients can't hold configuration-time secrets, so they don't have client secrets.
+The recommended way to instantiate a public client application is by using the application builders: _PublicClientApplicationBuilder_
+* *Confidential client applications*: Are apps that run on servers (web apps, web API apps, or even service/daemon apps). They're considered difficult to access, and for that reason capable of keeping an application secret. Confidential clients can hold configuration-time secrets. Each instance of the client has a distinct configuration (including client ID and client secret).
+Instantiates application using ConfidentialClientApplicationBuilder.
+
+Before initializing an application, you first need to register it so that your app can be integrated with the Microsoft identity platform. (that's done in Azure Portal). When you register an app, it automatically generates an API permission _user.read_ for Microsoft Graph
+The following code instantiates a public client application, signing-in users in the Microsoft Azure public cloud, with their work and school accounts, or their personal Microsoft accounts
+
+[source,java]
+----
+IPublicClientApplication app = PublicClientApplicationBuilder.Create(clientId).Build();
+----
+
+=== Shared Access Signatures
+
+A shared access signature (SAS) is a signed URI that points to one or more storage resources and includes a token that contains a special set of query parameters. The token indicates how the resources might be accessed by the client. One of the query parameters, the signature, is constructed from the SAS parameters and signed with the key that was used to create the SAS. This signature is used by Azure Storage to authorize access to the storage resource.
+Seems like this is a way to give access to storage to someone who has a link.
+
+Use a SAS when you want to provide secure access to resources in your storage account to any client who doesn't otherwise have permissions to those resources. A common scenario where a SAS is useful is a service where users read and write their own data to your storage account. There are two typical design patterns.
+* Clients upload and download data via a front-end proxy service, which performs authentication. This front-end proxy service has the advantage of allowing validation of business rules, but for large amounts of data or high-volume transactions, creating a service that can scale to match demand may be expensive or difficult
+image::auth/storage-proxy-service.png[]
+* A lightweight service authenticates the client as needed and then generates a SAS. Once the client application receives the SAS, they can access storage account resources directly with the permissions defined by the SAS and for the interval allowed by the SAS. The SAS mitigates the need for routing all data through the front-end proxy service.
+image::auth/storage-provider-service.png[]
+
+
+Azure Storage supports three types of shared access signatures:
+* User delegation SAS: A user delegation SAS is secured with Microsoft Entra credentials and also by the permissions specified for the SAS. A user delegation SAS applies to *Blob storage only*. This is the most secure type of SAS. Account key (below) can be easily compromised.
+* Service SAS: A service SAS is secured with the storage account key. A service SAS delegates access to a resource in the following Azure Storage services: Blob storage, Queue storage, Table storage, or Azure Files.
+* Account SAS: An account SAS is secured with the storage account key. An account SAS delegates access to resources in one or more of the storage services. All of the operations available via a service or user delegation SAS are also available via an account SAS.
+
+SAS Url consists of two parts:
+* A storage account/blob uri
+* SAS params. _sp=r&st=2020-01-20T11:42:32Z&se=2020-01-20T19:42:32Z&spr=https&sv=2019-02-02&sr=b&sig=SrW1HZ5Nb6MbRzTbXCaPm%2BJiSEn15tC91Y4umMPwVZs%3D_
+
+----
+https://medicalrecords.blob.core.windows.net/patient-images/patient-116139-nq8z7f.jpg?sp=r&st=2020-01-20T11:42:32Z&se=2020-01-20T19:42:32Z&spr=https&sv=2019-02-02&sr=b&sig=SrW1HZ5Nb6MbRzTbXCaPm%2BJiSEn15tC91Y4umMPwVZs%3D
+----
+
+sp - permissiont, st - when it starts working, se - expiry, sv - version of storage to use, sr - the kind of storage being used sr=b - blob
+
+
+Additionally, a SAS is required to authorize access to the source object in a copy operation in certain scenarios:
+* When you copy a blob to another blob that resides in a different storage account, you must use a SAS to authorize access to the source blob. You can optionally use a SAS to authorize access to the destination blob as well.
+* When you copy a file to another file that resides in a different storage account, you must use a SAS to authorize access to the source file. You can optionally use a SAS to authorize access to the destination file as well.
+* When you copy a blob to a file, or a file to a blob, you must use a SAS to authorize access to the source object, even if the source and destination objects reside within the same storage account.
+
+==== Stored Access Policies
+
+Provides an extra policy settings for SAS. (associates sas tokens with a policy)
+The access policy for a SAS consists of the start time, expiry time, and permissions for the SAS.
+You can specify all of access parameters on the signature URI (as above) and none within the stored access policy; all on the stored access policy and none on the URI; or some combination of the two. They can't overlap though.
+You can use a stored access policy to change the start time, expiry time, or permissions for a SAS, or to revoke it after it is issued.
+
+The following storage resources support stored access policies:
+
+* *Blob containers*
+* *File shares*
+* *Queues*
+* *Tables*
+
+To create or modify a stored access policy, call the Set ACL operation for the resource with a request body that specifies the terms of the access policy.
+
+
+== Microsoft Graph
+
+Microsoft Graph is a RESTful web API that enables you to access Microsoft Cloud service resources. After you _register your app_ and _get authentication tokens_ for a user or service, you can make requests to the Microsoft Graph API
+Microsoft Graph is the gateway to data and intelligence in *Microsoft 365*
+
+image::auth/microsoft-graph.png[]
+
+In the Microsoft 365 platform, three main components facilitate the access and flow of data:
+* *The Microsoft Graph API* offers a single endpoint, https://graph.microsoft.com. You can use REST APIs or SDKs to access the endpoint. Microsoft Graph also includes a powerful set of services that manage user and device identity, access, compliance, security, and help protect organizations from data leakage or loss
+* *Microsoft Graph connectors* work in the incoming direction, delivering data external to the Microsoft cloud into Microsoft Graph services and applications, to enhance Microsoft 365 experiences such as Microsoft Search. Connectors exist for many commonly used data sources such as Box, Google Drive, Jira, and Salesforce. For example Graph Connector for Search will collect data from various azure resources and index their contents (possibly)
+* *Microsoft Graph Data Connect* provides a set of tools to streamline secure and scalable delivery of Microsoft Graph data to popular Azure data stores. The cached data serves as data sources for Azure development tools that you can use to build intelligent applications.
+
+To read from or write to a *resource* such as a user or an email message, construct a request that looks like the following
+----
+{HTTP method} https://graph.microsoft.com/{version}/{resource}?{query-parameters}
+GET https://graph.microsoft.com/v1.0/me/messages?filter=emailAddress eq 'jon@contoso.com'
+----
+Graph comes in two versions as of now v1.0 (for prod use) and beta.
+A *resource* can be an entity or complex type, commonly defined with properties. Entities differ from complex types by always including an id property. An example of a resource that can be accessed with Graph is user or email message.
+
+Your URL includes the *resource* you're interacting with in the request, such as *me*, *user*, *group*, *drive*, and *site*. Often, top-level resources also include relationships, which you can use to access other resources, like *me/messages* or *me/drive*. You can also interact with resources using methods; for example, to send an email, use me/sendMail.
+
+=== Graph SDKs
+
+A library to access Microsoft Graph API.
+Consists of two parts:
+* Core Library - contains models and request builders that are generated from Microsoft Graph metadata to provide a rich and discoverable experience.
+* Service Library - provides a set of features that enhance working with all the Microsoft Graph services. Embedded support for retry handling, secure redirects, transparent authentication, and payload compression. The core library also provides support for common tasks such as paging through collections and creating batch requests.
+
+The Microsoft Graph client is designed to make it simple to make calls to Microsoft Graph. You can use a single client instance for the lifetime of the application.
+
+To access the data in Microsoft Graph, your application needs to acquire an *OAuth 2.0 access token*, and presents it to Microsoft Graph in either of the following methods:
+* The *HTTP Authorization request header*, as a Bearer token
+* *The graph client constructor*, when using a Microsoft Graph client library (SDK)
+Use the Microsoft Authentication Library API, *MSAL to acquire the access token* to Microsoft Graph
