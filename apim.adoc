@@ -1,0 +1,170 @@
+== API Management
+
+API Management provides the core functionality to ensure a successful API program through developer engagement, business insights, analytics, security, and protection.
+It's made up of the following components:
+* *API GATEWAY* -The API gateway is the endpoint that
+	** Accepts API calls and routes them to appropriate backends
+	** Verifies API keys and other credentials presented with requests
+	** Enforces usage quotas and rate limits
+	** Transforms requests and responses specified in policy statements
+	** Caches responses to improve response latency and minimize the load on backend services
+	** Emits logs, metrics, and traces for monitoring, reporting, and troubleshooting
+* *MANAGEMENT PLANE* - is the administrative interface where you set up your API program to:
+	** Provision and configure API Management service settings
+	** Define or import API schema
+	** Package APIs into products
+	** Set up policies like quotas or transformations on the APIs
+	** Get insights from analytics
+	** Manage users
+* *DEVELOPER PORTAL* - a customizable website with a documentation of your APIs  where developers can:
+	** Read API documentation
+	** Call an API via the interactive console
+	** Create an account and subscribe to get API keys
+	** Access analytics on their own usage
+	** Download API definitions
+	** Manage API keys
+
+=== Concepts in APIM
+
+==== Products
+
+Product is how API is surfaced to developers. Each product has one or more API and can be configured with a title, description, terms of use. Products can be *Open* or *Protected*. Protected products need to be subscribed to before they can be used. Subscription approval is configured at product level.
+
+==== Groups
+
+ API Management has the following immutable system groups:
+* *Administrators* - Manage APIM service instances and create APIs, oerations, products that are used by developers. Azure Subscription admins are members of this group.
+* *Developers* - Authenticated _developer portal_ users that use the APIs. They are granted access to the dev portal.
+* *Guests* - Unauthenticated _developer portal_ users. They can be granted certain read only access, like the ability to view APIs but not call them.
+
+In addition to above admins, can create custom groups or use external groups in associated Microsoft Entra tenants.
+
+==== Developers
+
+Represent user accounts in APIM. They can be created or invited to join by admins, or they can sign up themselves from the _developer portal_. Each developer is a member of a one or more grups and can subscribe to produts that grant visibility to those groups (or that groups grant visibility to)
+
+==== Policies
+
+Policies allow the publisher to change the behavior of the API through configuration.
+Policies are a collection of statements that are executed _sequentially_ on the request or response of an API. Popular statements include format conversion from XML to JSON and call rate limiting to restrict the number of incoming calls from a developer, and many other policies are available.
+Policies can be applied at different scopes, depending on your needs: global (all APIs), a product, a specific API, or an API operation.
+They are applied inside the gateway that sits between the API consumer and the managed API.
+The policy definition is a simple XML document that describes a sequence of inbound and outbound statements. Each expression has access to the implicitly provided *_context_* variable and an allowed subset of .NET Framework types
+
+[source,xml]
+----
+<policies>
+  <inbound>
+    <!-- statements to be applied to the request go here -->
+    <set-header name="x-request-context-data" exists-action="override">
+        <value>@(context.User.Id)</value>
+        <value>@(context.Deployment.Region)</value>
+      </set-header>
+	<base /> <!-- defines when policies at global scope are executed. Here global scope will exec after set header
+  </inbound>
+  <backend>
+    <!-- statements to be applied before the request is forwarded to
+         the backend service go here -->
+  </backend>
+  <outbound>
+    <!-- statements to be applied to the response go here -->
+  </outbound>
+  <on-error>
+    <!-- statements to be applied if there is an error condition go here -->
+  </on-error>
+</policies>
+----
+If there's an error during the processing of a request, any remaining steps in the inbound, backend, or outbound sections are skipped and execution jumps to the statements in the on-error section.
+
+A policy expression is either:
+* a single C# statement enclosed in `+@(expression)+`, or
+* a multi-statement C# code block, enclosed in `+@{expression}+`, that returns a value
+
+There are several types of policies - among them the following:
+* *Control flow* - Conditionally applies policy statements based on the results of the evaluation of Boolean expressions. XML-tag is `+<choose><when condition=""><otherwise>+`
+* *Forward request* - Forwards the request to the backend service specified in the request context. Removing this policy results in the request not being forwarded to the backend service and the policies in the outbound section are evaluated immediately upon the successful completion of the policies in the inbound section. `+<forward-request timeout="time in seconds" follow-redirects="true | false"/>+`
+* *Limit concurrency* - Prevents enclosed policies from executing by more than the specified number of requests at a time. Upon exceeding that number, new requests will fail immediately with a 429 Too Many Requests.
+* *Log to Event Hub* - Sends messages in the specified format to an Event Hub defined by a Logger entity.
+* *Mock response* - Aborts pipeline execution and returns a mocked response directly to the caller. It generates sample responses from schemas, when schemas are provided and response examples are not. If neither examples or schemas are found, responses with no content are returned
+* *Retry* - Retries execution of the enclosed policy statements, if and until the condition is met. Execution will repeat at the specified time intervals and up to the specified retry count.
+* *Return response* - Aborts pipeline execution and returns either a default or custom response to the caller. Default response is 200 OK with no body. Custom response can be specified via a context variable or policy statements.
+
+=== API Gateway
+
+The API Management gateway (also called data plane or runtime) is the service component that's responsible for proxying API requests, applying policies, and collecting telemetry.
+An API gateway sits between clients and services. It acts as a reverse proxy, routing requests from clients to services. It may also perform various cross-cutting tasks such as authentication, SSL termination, and rate limiting.
+Gateway is used primarily to:
+* Decouple API clients and backend services. Clients don't need to know how many backend services there are, how they're scaled, changed, end of lifed, added etc. Clients also don't need to know backend urls.
+* Take care of some cross cutting concerns like security, authentication, SSL, client rate limiting, logging.
+* Execute complex operations which require calling several backend services
+
+There are two types of gateways available:
+* *Managed* - default gateway component that is deployed in Azure for every API Management instance in every service tier. All API traffic flows through Azure regardless of where backends implementing the APIs are hosted.
+* *Self-hosted* - optional, containerized version of the default managed gateway. Useful in scenarios when it's required to run gateways off of Azure in same environments where API backends are hosted. It enables customers with hybrid infra to manage APIs hosted on-premises and across clouds from a single API Managementn service in Azure.
+
+=== Subscription keys
+
+It's a way of securing the api. API Management also supports other mechanisms for securing access to APIs, including: *OAuth2.0, Client certificates, and IP allow listing*.
+
+Developers who need to consume the published APIs must include a valid subscription key in HTTP requests when they make calls to those APIs. Otherwise, the calls are rejected immediately by the API Management gateway.
+To get a subscription key, you first need a subscription - a container for a pair of subscription keys. API consumers need to get subscriptions and they don't need approval from API publishers. Subscriptions are scoped to different areas and give granylar control over permissions and policies.
+
+The three main scopes are:
+* All Apis - all apis available from the gateway
+* Single API
+* Product - A product is a collection of one or more APIs that you configure in API Management. You can assign APIs to more than one product. Products can have different access rules, usage quotas, and terms of use
+
+Subscription key is provided in the request header `+Ocp-Apim-Subscription-Key+` or query param `+subscription-key+`
+
+=== Securing API using certificates
+
+Certificates can be used to provide *Transport Layer Security (TLS)* mutual authentication between the client and the API gateway. You can configure the API Management gateway to allow only requests with certificates containing a specific thumbprint (or require other properties). The authorization at the gateway level is handled through *inbound policies*.
+
+When filtering the certificate in the inbound policy we can check the following certificate properties:
+* *Certificate Authority (CA)* - Only allow certificates signed by particular CA
+* *Thumbprint* - Allow certificates containing a specified thumbprint
+* *Subject* - Only certificates with specified subject
+* *Expiration Date* - Only the ones that have not expired
+
+These properties can be mixed in the policy condition.
+
+Client certificates are signed to ensure that they are not tampered with. There are two ways to verify that a cert comes from a client and not an imposter.
+* *Check who issued the certificate.* If the issuer was a certificate authority that you trust, you can use the certificate. You can configure the trusted certificate authorities in the Azure portal to automate this process.
+* If the certificate is issued by the partner, verify that it came from them. For example, if they deliver the certificate in person, you can be sure of its authenticity. These are known as self-signed certificates.
+
+If you're in consumption tier, you must explicitly enable the use of client certificates, which you can do on the *Custom domains page*. This step is not necessary in other tiers.
+
+==== Enabling certificate policies
+
+Create these policies in the inbound processing policy file within the API Management gateway.
+
+image::apim/apim-inbound-policy.png[]
+
+*Checking certificate properties example*
+
+Every client certificate includes a thumbprint, which is a hash, calculated from other certificate properties. The thumbprint ensures that the values in the certificate have not been altered since the certificate was issued by the certificate authority
+
+[source,xml]
+----
+<choose>
+    <when condition="@(context.Request.Certificate == null || context.Request.Certificate.Thumbprint != "desired-thumbprint")" >
+        <return-response>
+            <set-status code="403" reason="Invalid client certificate" />
+        </return-response>
+    </when>
+</choose>
+----
+
+Checking thhe issuer and the subject of client cert
+
+[source,xml]
+----
+<when condition="@(context.Request.Certificate == null || context.Request.Certificate.Issuer != "trusted-issuer" || context.Request.Certificate.SubjectName.Name != "expected-subject-name")" >
+----
+
+Checking the thumbprint against certificates that I have uploaded in *Client certificates* page
+
+[source,xml]
+----
+<when condition="@(context.Request.Certificate == null || !context.Request.Certificate.Verify()  || !context.Deployment.Certificates.Any(c => c.Value.Thumbprint == context.Request.Certificate.Thumbprint))" >
+----

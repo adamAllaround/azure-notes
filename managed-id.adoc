@@ -1,0 +1,61 @@
+== Managed Identities
+
+Managed identity helps azure resources communicate with each other without the need to manage credentials, secrets, keys or certificates. While developers can securely store the secrets in Azure Key Vault, services need a way to access Azure Key Vault. Managed identities provide an automatically managed identity in Microsoft Entra ID for applications to use when connecting to resources that support Microsoft Entra authentication. Applications can use managed identities to obtain Microsoft Entra tokens without having to manage any credentials.
+Internally managed identities are service principals of a special kind that can only be used with Azure resources. Managed identities for Azure resources can be used to authenticate to services that support Microsoft Entra authentication.
+
+For example, you can use managed identities if you want to build an app using Azure App Services that accesses Azure Storage without having to manage any credentials.
+
+image::managed-id/mi-use-case.png[]
+
+=== Types of Managed Identities
+
+* *System assigned* - enabled directly on Azure instance. When enabled Azure creates an identity in Azure Entra tenant. The lifecycle of a system-assigned identity is directly tied to the Azure service instance that it's enabled on. If the instance is deleted, Azure automatically cleans up the credentials and the identity in Microsoft Entra ID.
+* *User assigned*  - is created as a standalone Azure Resource. After the identity is created, the identity can be assigned to one or more Azure service instances. The lifecycle of a user-assigned identity is managed separately from the lifecycle of the Azure service instances to which it's assigned.
+
+
+When MAnaged identity is configured in VM for example, a service prinvipal is created and that service principal can be used to grant access to particular Azure Resources- ie a particular key in key vault. Code running on the VM can request a token from Azure Instance MEtadata service endpoint that is accessible only from the VM `+http://169.254.169.254/metadata/identity/oauth2/token+`. The Metadata service holds a service principal's ClientID and a certificate that was added to it when configured and the MEtadata service will make a call to Entra ID with a service principal (in the identity) and a certificate. Microsoft Entra ID returns a JWT token.
+
+There is an Azure Identity SDK to aid with above cycle. Here's a code creating resources and creating managed identities from Java code.
+https://github.com/Azure-Samples/compute-java-manage-resources-from-vm-with-msi-in-aad-group[Here]
+
+Here's how to authenticate with Identity SDK using a `+DefaultAzureCredential+`
+
+----
+// When deployed to an azure host, the default azure credential will authenticate the specified user assigned managed identity.
+
+string userAssignedClientId = "<your managed identity client Id>";
+var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions { ManagedIdentityClientId = userAssignedClientId });
+
+var blobClient = new BlobClient(new Uri("https://myaccount.blob.core.windows.net/mycontainer/myblob"), credential);
+----
+
+While the `+DefaultAzureCredential+` is generally the quickest way to get started developing applications for Azure, more advanced users may want to customize the credentials considered when authenticating. The `+ChainedTokenCredential+` enables users to combine multiple credential instances to define a customized chain of credentials. This example demonstrates creating a `+ChainedTokenCredential+` which attempts to authenticate using managed identity, and fall back to authenticating via the Azure CLI.
+
+----
+// Authenticate using managed identity if it is available; otherwise use the Azure CLI to authenticate.
+
+var credential = new ChainedTokenCredential(new ManagedIdentityCredential(), new AzureCliCredential());
+
+var eventHubProducerClient = new EventHubProducerClient("myeventhub.eventhubs.windows.net", "myhubpath", credential);
+----
+
+
+=== Assigning system assigned identity to a VM.
+(Requires Virtual Machine Contributor role assignment)
+`+az vm identity assign -g myResourceGroup -n myVm+`
+
+or when creating a resource, use switch `+--assign-identity+`
+
+=== User assigned managed identity
+(requires Virtual Machine Contributor and Managed Identity Operator role assignments)
+
+`+az identity create -g myResourceGroup -n myUserAssignedIdentity+`
+
+now this existing identity can be assigned to a VM on creation with the following switch
+
+`+--assign-identity myUserAssignedIdentity+`
+
+if we want to assign a user assigned identity to an existing resource we need to use the following command
+
+`+az vm identity assign -g <RESOURCE GROUP> -n <VM NAME> --identities myUserAssignedIdentity+`
+
